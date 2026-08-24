@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"order-position-engine/internal/models"
 	"order-position-engine/internal/position"
@@ -180,8 +181,9 @@ func main() {
 	// 3. GET /events/stream - Server-Sent Events stream for live dashboard
 	mux.HandleFunc("/events/stream", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Cache-Control", "no-cache, no-transform")
 		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("X-Accel-Buffering", "no")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
 		flusher, ok := w.(http.Flusher)
@@ -204,11 +206,17 @@ func main() {
 		fmt.Fprintf(w, "data: %s\n\n", initData)
 		flusher.Flush()
 
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
 		ctx := r.Context()
 		for {
 			select {
 			case <-ctx.Done():
 				return
+			case <-ticker.C:
+				fmt.Fprintf(w, ": ping\n\n")
+				flusher.Flush()
 			case msg, ok := <-messageChan:
 				if !ok {
 					return

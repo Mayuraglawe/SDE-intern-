@@ -70,21 +70,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function markConnected() {
+        if (statusBadge) statusBadge.className = 'status-badge connected';
+        if (statusText) statusText.textContent = 'STREAM LIVE';
+    }
+
+    function markDisconnected() {
+        if (statusBadge) statusBadge.className = 'status-badge disconnected';
+        if (statusText) statusText.textContent = 'CONNECTING...';
+    }
+
     // 1. Setup Server-Sent Events (SSE) Stream
     function initSSEStream() {
         const evtSource = new EventSource('/events/stream');
 
         evtSource.onopen = () => {
-            statusBadge.className = 'status-badge connected';
-            statusText.textContent = 'STREAM LIVE';
+            markConnected();
         };
 
         evtSource.onerror = () => {
-            statusBadge.className = 'status-badge disconnected';
-            statusText.textContent = 'STREAM DISCONNECTED';
+            markDisconnected();
         };
 
         evtSource.onmessage = (event) => {
+            markConnected();
             try {
                 const data = JSON.parse(event.data);
 
