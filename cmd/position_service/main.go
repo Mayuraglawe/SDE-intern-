@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/csv"
 	"encoding/json"
 	"flag"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,6 +21,37 @@ import (
 	"order-position-engine/internal/position"
 	"order-position-engine/internal/validator"
 )
+
+//go:embed seed_data.sql
+var embeddedSeedSQL string
+
+func loadSeedData(mgr *position.Manager, addLog func(models.ProcessResult)) int {
+	re := regexp.MustCompile(`VALUES\s*\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*\)`)
+	matches := re.FindAllStringSubmatch(embeddedSeedSQL, -1)
+
+	count := 0
+	for _, match := range matches {
+		if len(match) < 5 {
+			continue
+		}
+		qty, err := strconv.Atoi(match[4])
+		if err != nil {
+			continue
+		}
+		event := models.OrderEvent{
+			EventID:         match[1],
+			Symbol:          match[2],
+			TransactionType: models.TransactionType(match[3]),
+			Quantity:        qty,
+		}
+		res, err := mgr.ProcessEvent(event)
+		if err == nil {
+			addLog(res)
+			count++
+		}
+	}
+	return count
+}
 
 // SSEBroadcaster handles real-time Server-Sent Events streaming to web clients.
 type SSEBroadcaster struct {
@@ -84,6 +117,10 @@ func main() {
 			auditLogs = auditLogs[:200]
 		}
 	}
+
+	// Pre-load seed_data.sql events directly into memory on startup
+	loadedSeedCount := loadSeedData(mgr, addAuditLog)
+	log.Printf("[POSITION ENGINE SEED] Auto-loaded %d seed database order updates into memory on startup", loadedSeedCount)
 
 	getAuditLogs := func() []models.ProcessResult {
 		auditMu.RLock()
