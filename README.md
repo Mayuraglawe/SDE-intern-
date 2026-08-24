@@ -47,16 +47,18 @@ The system consists of two independent Go microservice processes communicating o
 ```
 
 ### Component Breakdown & Design Choices
-1. **Order Update Service (Producer)**:
+1. **Architecture Scope Choice**:
+   - Uses a straightforward **two-service Client-Server pattern** rather than complex distributed microservice orchestration (e.g. Kubernetes, service mesh, API gateways, or message brokers) because the requirements explicitly mark distributed deployment and persistent databases as non-goals. This achieves strict process separation while avoiding unnecessary operational complexity.
+2. **Order Update Service (Producer)**:
    - **Incremental Ingestion**: Uses Go's standard `encoding/csv` reader row-by-row. Maintains $O(1)$ memory consumption regardless of file size.
    - **Validation Layer**: Rejects blank fields, invalid transaction types, floats, and zero/negative quantities.
    - **Rate Throttler**: Enforces a strict, configurable rate limit (default: 50 events/sec) using time delta calculations.
-2. **Position Maintaining Service (Consumer)**:
+3. **Position Maintaining Service (Consumer)**:
    - **Position Store**: `map[string]int` tracking net positions (`BUY` adds, `SELL` subtracts). Retains symbol entries even when net position is zero or negative.
    - **Idempotency Set**: `map[string]struct{}` storing seen `event_id` keys. In Go, `struct{}` allocates 0 bytes, minimizing memory growth. First valid `event_id` wins; duplicates are ignored.
    - **Thread Safety & Concurrent Read/Write Protection**: State operations use `sync.RWMutex`. Read operations (`GET /position`) return a **shallow copy** of the position map to prevent concurrent map mutation panics.
    - **Real-Time Telemetry Stream**: Exposes Server-Sent Events (SSE) `/events/stream` to push updates directly to web clients.
-3. **Web Analytics Platform ("Proper Platform")**:
+4. **Web Analytics Platform ("Proper Platform")**:
    - Built with Vanilla HTML5, CSS3 (Glassmorphism Dark Mode UI), JavaScript, and Chart.js.
    - Features live symbol position bar charts, telemetry cards, audit log search filter, manual REST API query tool, and direct drag-and-drop CSV batch uploader.
 
@@ -204,30 +206,35 @@ curl -X POST http://localhost:8080/reset
 
 ## 📁 Repository Directory Structure
 
-```
+```text
 .
 ├── cmd/
 │   ├── order_service/
 │   │   └── main.go          # CSV Producer process entrypoint
 │   └── position_service/
-│       └── main.go          # State Consumer & Web API server
+│       ├── main.go          # State Consumer & Web API server
+│       └── seed_data.sql    # Startup seed data
 ├── internal/
-│   ├── models/
-│   │   └── event.go         # Structs and TransactionType enums
-│   ├── validator/
-│   │   ├── validator.go     # Strict input data contract validator
-│   │   └── validator_test.go# Unit tests for validation edge cases
+│   ├── order/
+│   │   ├── config.go        # Configuration & stream metrics stats
+│   │   ├── csv_reader.go    # Line-by-line CSV reader & streamer
+│   │   ├── validator.go     # Data contract validator (event_id, symbol, tx_type, qty)
+│   │   ├── validator_test.go# Unit tests for validation edge cases
+│   │   ├── throttler.go     # 50 events/sec rate limiter
+│   │   └── sender.go        # HTTP POST event dispatcher
 │   ├── position/
-│   │   ├── manager.go       # Concurrency-safe state & idempotency manager
-│   │   └── manager_test.go  # Unit tests for position math & goroutines
-│   └── producer/
-│       └── streamer.go      # Incremental CSV reader & throttled HTTP client
+│   │   ├── manager.go       # Concurrency-safe state & RLock idempotency manager
+│   │   ├── manager_test.go  # Unit tests for position calculation & concurrency
+│   │   └── handler.go       # HTTP endpoint handlers (/events, /position, /events/stream)
+│   └── shared/
+│       └── models.go        # OrderEvent, ProcessResult, & TransactionType enums
 ├── web/
 │   ├── index.html           # Web Platform UI Layout
+│   ├── positions.html       # Position View HTML Layout
 │   ├── style.css            # Modern Glassmorphism CSS styles
 │   └── app.js               # Real-time SSE listener & Chart.js logic
 ├── docs/
-│   └── System_Documentation.md # Detailed Low-Level Design & Rules
+│   └── System_Documentation.md # System architecture documentation
 ├── go.mod                   # Go module definition
 ├── order_updates (1).csv    # Assessment dataset (1002 rows)
 └── README.md                # Project documentation & run guide
