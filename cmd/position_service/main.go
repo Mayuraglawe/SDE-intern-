@@ -108,10 +108,19 @@ func main() {
 
 	var auditMu sync.RWMutex
 	var auditLogs []models.ProcessResult
+	var totalEventsCount, acceptedEventsCount, duplicateEventsCount, rejectedEventsCount int
 
 	addAuditLog := func(res models.ProcessResult) {
 		auditMu.Lock()
 		defer auditMu.Unlock()
+		totalEventsCount++
+		if res.Status == models.StatusAccepted {
+			acceptedEventsCount++
+		} else if res.Status == models.StatusDuplicate {
+			duplicateEventsCount++
+		} else if res.Status == models.StatusRejected {
+			rejectedEventsCount++
+		}
 		auditLogs = append([]models.ProcessResult{res}, auditLogs...)
 		if len(auditLogs) > 200 {
 			auditLogs = auditLogs[:200]
@@ -134,6 +143,10 @@ func main() {
 		auditMu.Lock()
 		defer auditMu.Unlock()
 		auditLogs = nil
+		totalEventsCount = 0
+		acceptedEventsCount = 0
+		duplicateEventsCount = 0
+		rejectedEventsCount = 0
 	}
 
 	mux := http.NewServeMux()
@@ -235,10 +248,18 @@ func main() {
 
 		// Send initial positions state and recent audit logs
 		positions := mgr.GetPositions()
+		auditMu.RLock()
+		tEvt, aEvt, dEvt, rEvt := totalEventsCount, acceptedEventsCount, duplicateEventsCount, rejectedEventsCount
+		auditMu.RUnlock()
+
 		initData, _ := json.Marshal(map[string]interface{}{
-			"type":          "INIT",
-			"positions":     positions,
-			"recent_events": getAuditLogs(),
+			"type":             "INIT",
+			"positions":        positions,
+			"recent_events":    getAuditLogs(),
+			"total_events":     tEvt,
+			"accepted_events":  aEvt,
+			"duplicate_events": dEvt,
+			"rejected_events":  rEvt,
 		})
 		fmt.Fprintf(w, "data: %s\n\n", initData)
 		flusher.Flush()

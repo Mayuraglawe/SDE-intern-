@@ -99,13 +99,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (data.type === 'INIT') {
                     state.positions = data.positions || {};
-                    if (Array.isArray(data.recent_events) && data.recent_events.length > 0) {
+                    if (Array.isArray(data.recent_events)) {
                         state.logEntries = data.recent_events;
-                        state.totalEvents = data.recent_events.length;
-                        state.acceptedEvents = data.recent_events.filter(e => e.status === 'ACCEPTED').length;
-                        state.duplicateEvents = data.recent_events.filter(e => e.status === 'DUPLICATE').length;
-                        state.rejectedEvents = data.recent_events.filter(e => e.status === 'REJECTED').length;
                     }
+                    state.totalEvents = data.total_events !== undefined ? data.total_events : (data.recent_events ? data.recent_events.length : 0);
+                    state.acceptedEvents = data.accepted_events !== undefined ? data.accepted_events : 0;
+                    state.duplicateEvents = data.duplicate_events !== undefined ? data.duplicate_events : 0;
+                    state.rejectedEvents = data.rejected_events !== undefined ? data.rejected_events : 0;
                     updateUI();
                     return;
                 }
