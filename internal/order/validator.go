@@ -1,4 +1,4 @@
-package validator
+package order
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"order-position-engine/internal/models"
+	"order-position-engine/internal/shared"
 )
 
 var (
@@ -19,7 +19,7 @@ var (
 )
 
 // ValidateRecord validates a raw CSV row slice and returns a structured OrderEvent or error.
-func ValidateRecord(record []string) (*models.OrderEvent, error) {
+func ValidateRecord(record []string) (*shared.OrderEvent, error) {
 	if len(record) < 4 {
 		return nil, ErrInvalidColumnCount
 	}
@@ -36,11 +36,11 @@ func ValidateRecord(record []string) (*models.OrderEvent, error) {
 		return nil, ErrBlankSymbol
 	}
 
-	var txType models.TransactionType
-	if txTypeStr == string(models.TxBuy) {
-		txType = models.TxBuy
-	} else if txTypeStr == string(models.TxSell) {
-		txType = models.TxSell
+	var txType shared.TransactionType
+	if txTypeStr == string(shared.TxBuy) {
+		txType = shared.TxBuy
+	} else if txTypeStr == string(shared.TxSell) {
+		txType = shared.TxSell
 	} else {
 		return nil, fmt.Errorf("%w: got %q", ErrInvalidTxType, txTypeStr)
 	}
@@ -54,7 +54,7 @@ func ValidateRecord(record []string) (*models.OrderEvent, error) {
 		return nil, fmt.Errorf("%w: got %d", ErrNonPositiveQuantity, qty)
 	}
 
-	return &models.OrderEvent{
+	return &shared.OrderEvent{
 		EventID:         eventID,
 		Symbol:          symbol,
 		TransactionType: txType,
@@ -63,7 +63,7 @@ func ValidateRecord(record []string) (*models.OrderEvent, error) {
 }
 
 // ValidateEvent validates an unmarshaled OrderEvent struct.
-func ValidateEvent(event *models.OrderEvent) error {
+func ValidateEvent(event *shared.OrderEvent) error {
 	if event == nil {
 		return errors.New("event cannot be nil")
 	}
@@ -74,7 +74,7 @@ func ValidateEvent(event *models.OrderEvent) error {
 	if strings.TrimSpace(event.Symbol) == "" {
 		return ErrBlankSymbol
 	}
-	if event.TransactionType != models.TxBuy && event.TransactionType != models.TxSell {
+	if event.TransactionType != shared.TxBuy && event.TransactionType != shared.TxSell {
 		return fmt.Errorf("%w: got %q", ErrInvalidTxType, event.TransactionType)
 	}
 	if event.Quantity <= 0 {

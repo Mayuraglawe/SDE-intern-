@@ -5,32 +5,32 @@ import (
 	"sync"
 	"testing"
 
-	"order-position-engine/internal/models"
 	"order-position-engine/internal/position"
+	"order-position-engine/internal/shared"
 )
 
 func TestPositionManager_SingleSymbol(t *testing.T) {
 	mgr := position.NewManager()
 
 	// 1. BUY 90 RELIANCE
-	res, err := mgr.ProcessEvent(models.OrderEvent{
+	res, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-0001",
 		Symbol:          "RELIANCE",
-		TransactionType: models.TxBuy,
+		TransactionType: shared.TxBuy,
 		Quantity:        90,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.Status != models.StatusAccepted || res.NetPosition != 90 {
+	if res.Status != shared.StatusAccepted || res.NetPosition != 90 {
 		t.Errorf("got status=%s net=%d, want ACCEPTED net=90", res.Status, res.NetPosition)
 	}
 
 	// 2. SELL 30 RELIANCE -> Net: 60
-	res2, err := mgr.ProcessEvent(models.OrderEvent{
+	res2, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-0002",
 		Symbol:          "RELIANCE",
-		TransactionType: models.TxSell,
+		TransactionType: shared.TxSell,
 		Quantity:        30,
 	})
 	if err != nil {
@@ -41,10 +41,10 @@ func TestPositionManager_SingleSymbol(t *testing.T) {
 	}
 
 	// 3. SELL 60 RELIANCE -> Net: 0 (must stay in GET /position)
-	res3, err := mgr.ProcessEvent(models.OrderEvent{
+	res3, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-0003",
 		Symbol:          "RELIANCE",
-		TransactionType: models.TxSell,
+		TransactionType: shared.TxSell,
 		Quantity:        60,
 	})
 	if err != nil {
@@ -68,10 +68,10 @@ func TestPositionManager_NegativePosition(t *testing.T) {
 	mgr := position.NewManager()
 
 	// SELL 75 TCS on empty position -> Net: -75
-	res, err := mgr.ProcessEvent(models.OrderEvent{
+	res, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-0002",
 		Symbol:          "TCS",
-		TransactionType: models.TxSell,
+		TransactionType: shared.TxSell,
 		Quantity:        75,
 	})
 	if err != nil {
@@ -91,27 +91,27 @@ func TestPositionManager_Idempotency(t *testing.T) {
 	mgr := position.NewManager()
 
 	// First event: BUY 100 INFY
-	res1, err := mgr.ProcessEvent(models.OrderEvent{
+	res1, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-dup-001",
 		Symbol:          "INFY",
-		TransactionType: models.TxBuy,
+		TransactionType: shared.TxBuy,
 		Quantity:        100,
 	})
-	if err != nil || res1.Status != models.StatusAccepted {
+	if err != nil || res1.Status != shared.StatusAccepted {
 		t.Fatalf("first event failed: %v", err)
 	}
 
 	// Duplicate event: Same event_id, different quantity (200) -> First wins!
-	res2, err := mgr.ProcessEvent(models.OrderEvent{
+	res2, err := mgr.ProcessEvent(shared.OrderEvent{
 		EventID:         "evt-dup-001",
 		Symbol:          "INFY",
-		TransactionType: models.TxBuy,
+		TransactionType: shared.TxBuy,
 		Quantity:        200,
 	})
 	if err != nil {
 		t.Fatalf("duplicate event returned unexpected error: %v", err)
 	}
-	if res2.Status != models.StatusDuplicate {
+	if res2.Status != shared.StatusDuplicate {
 		t.Errorf("got status=%s, want DUPLICATE", res2.Status)
 	}
 
@@ -136,10 +136,10 @@ func TestPositionManager_ConcurrentAccess(t *testing.T) {
 			for j := 0; j < eventsPerGoroutine; j++ {
 				eventID := fmt.Sprintf("evt-%d-%d", gId, j)
 				symbol := fmt.Sprintf("SYM-%d", j%5)
-				mgr.ProcessEvent(models.OrderEvent{
+				mgr.ProcessEvent(shared.OrderEvent{
 					EventID:         eventID,
 					Symbol:          symbol,
-					TransactionType: models.TxBuy,
+					TransactionType: shared.TxBuy,
 					Quantity:        10,
 				})
 			}

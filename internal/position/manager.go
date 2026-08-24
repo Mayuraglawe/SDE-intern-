@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"order-position-engine/internal/models"
-	"order-position-engine/internal/validator"
+	"order-position-engine/internal/order"
+	"order-position-engine/internal/shared"
 )
 
 // Manager manages in-memory position state and idempotency checks with thread safety.
@@ -24,10 +24,10 @@ func NewManager() *Manager {
 }
 
 // ProcessEvent processes an incoming order event idempotently and updates net symbol position.
-func (m *Manager) ProcessEvent(event models.OrderEvent) (models.ProcessResult, error) {
-	if err := validator.ValidateEvent(&event); err != nil {
-		return models.ProcessResult{
-			Status:    models.StatusRejected,
+func (m *Manager) ProcessEvent(event shared.OrderEvent) (shared.ProcessResult, error) {
+	if err := order.ValidateEvent(&event); err != nil {
+		return shared.ProcessResult{
+			Status:    shared.StatusRejected,
 			EventID:   event.EventID,
 			Symbol:    event.Symbol,
 			Reason:    err.Error(),
@@ -41,8 +41,8 @@ func (m *Manager) ProcessEvent(event models.OrderEvent) (models.ProcessResult, e
 	// Idempotency Check: First valid event for an event_id wins.
 	if _, exists := m.seenEvents[event.EventID]; exists {
 		currPos := m.positions[event.Symbol]
-		return models.ProcessResult{
-			Status:      models.StatusDuplicate,
+		return shared.ProcessResult{
+			Status:      shared.StatusDuplicate,
 			EventID:     event.EventID,
 			Symbol:      event.Symbol,
 			NetPosition: currPos,
@@ -56,16 +56,16 @@ func (m *Manager) ProcessEvent(event models.OrderEvent) (models.ProcessResult, e
 
 	// Update symbol position
 	switch event.TransactionType {
-	case models.TxBuy:
+	case shared.TxBuy:
 		m.positions[event.Symbol] += event.Quantity
-	case models.TxSell:
+	case shared.TxSell:
 		m.positions[event.Symbol] -= event.Quantity
 	}
 
 	netPos := m.positions[event.Symbol]
 
-	return models.ProcessResult{
-		Status:      models.StatusAccepted,
+	return shared.ProcessResult{
+		Status:      shared.StatusAccepted,
 		EventID:     event.EventID,
 		Symbol:      event.Symbol,
 		NetPosition: netPos,

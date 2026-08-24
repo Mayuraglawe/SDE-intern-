@@ -4,7 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"order-position-engine/internal/producer"
+	"order-position-engine/internal/order"
 )
 
 func main() {
@@ -20,7 +20,7 @@ func main() {
 	log.Printf(" - Throttle:    %d events/sec", *rateLimitMPS)
 	log.Printf("==========================================================")
 
-	streamer := producer.NewStreamer(producer.StreamerConfig{
+	streamer := order.NewStreamer(order.Config{
 		CSVFilePath:  *csvFile,
 		TargetURL:    *targetURL,
 		RateLimitMPS: *rateLimitMPS,

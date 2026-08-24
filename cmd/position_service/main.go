@@ -17,15 +17,15 @@ import (
 	"sync"
 	"time"
 
-	"order-position-engine/internal/models"
+	"order-position-engine/internal/order"
 	"order-position-engine/internal/position"
-	"order-position-engine/internal/validator"
+	"order-position-engine/internal/shared"
 )
 
 //go:embed seed_data.sql
 var embeddedSeedSQL string
 
-func loadSeedData(mgr *position.Manager, addLog func(models.ProcessResult)) int {
+func loadSeedData(mgr *position.Manager, addLog func(shared.ProcessResult)) int {
 	re := regexp.MustCompile(`VALUES\s*\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*(\d+)\s*\)`)
 	matches := re.FindAllStringSubmatch(embeddedSeedSQL, -1)
 
@@ -38,10 +38,10 @@ func loadSeedData(mgr *position.Manager, addLog func(models.ProcessResult)) int 
 		if err != nil {
 			continue
 		}
-		event := models.OrderEvent{
+		event := shared.OrderEvent{
 			EventID:         match[1],
 			Symbol:          match[2],
-			TransactionType: models.TransactionType(match[3]),
+			TransactionType: shared.TransactionType(match[3]),
 			Quantity:        qty,
 		}
 		res, err := mgr.ProcessEvent(event)
@@ -51,45 +51,6 @@ func loadSeedData(mgr *position.Manager, addLog func(models.ProcessResult)) int 
 		}
 	}
 	return count
-}
-
-// SSEBroadcaster handles real-time Server-Sent Events streaming to web clients.
-type SSEBroadcaster struct {
-	mu      sync.Mutex
-	clients map[chan []byte]bool
-}
-
-func NewSSEBroadcaster() *SSEBroadcaster {
-	return &SSEBroadcaster{
-		clients: make(map[chan []byte]bool),
-	}
-}
-
-func (b *SSEBroadcaster) AddClient(ch chan []byte) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.clients[ch] = true
-}
-
-func (b *SSEBroadcaster) RemoveClient(ch chan []byte) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if _, ok := b.clients[ch]; ok {
-		delete(b.clients, ch)
-		close(ch)
-	}
-}
-
-func (b *SSEBroadcaster) Broadcast(data []byte) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	for ch := range b.clients {
-		select {
-		case ch <- data:
-		default:
-			// Client buffer full; skip to prevent blocking
-		}
-	}
 }
 
 func main() {
@@ -104,24 +65,24 @@ func main() {
 	flag.Parse()
 
 	mgr := position.NewManager()
-	broadcaster := NewSSEBroadcaster()
+	broadcaster := position.NewSSEBroadcaster()
 
 	var auditMu sync.RWMutex
-	var auditLogs []models.ProcessResult
+	var auditLogs []shared.ProcessResult
 	var totalEventsCount, acceptedEventsCount, duplicateEventsCount, rejectedEventsCount int
 
-	addAuditLog := func(res models.ProcessResult) {
+	addAuditLog := func(res shared.ProcessResult) {
 		auditMu.Lock()
 		defer auditMu.Unlock()
 		totalEventsCount++
-		if res.Status == models.StatusAccepted {
+		if res.Status == shared.StatusAccepted {
 			acceptedEventsCount++
-		} else if res.Status == models.StatusDuplicate {
+		} else if res.Status == shared.StatusDuplicate {
 			duplicateEventsCount++
-		} else if res.Status == models.StatusRejected {
+		} else if res.Status == shared.StatusRejected {
 			rejectedEventsCount++
 		}
-		auditLogs = append([]models.ProcessResult{res}, auditLogs...)
+		auditLogs = append([]shared.ProcessResult{res}, auditLogs...)
 		if len(auditLogs) > 200 {
 			auditLogs = auditLogs[:200]
 		}
@@ -131,10 +92,10 @@ func main() {
 	loadedSeedCount := loadSeedData(mgr, addAuditLog)
 	log.Printf("[POSITION ENGINE SEED] Auto-loaded %d seed database order updates into memory on startup", loadedSeedCount)
 
-	getAuditLogs := func() []models.ProcessResult {
+	getAuditLogs := func() []shared.ProcessResult {
 		auditMu.RLock()
 		defer auditMu.RUnlock()
-		cp := make([]models.ProcessResult, len(auditLogs))
+		cp := make([]shared.ProcessResult, len(auditLogs))
 		copy(cp, auditLogs)
 		return cp
 	}
@@ -149,84 +110,23 @@ func main() {
 		rejectedEventsCount = 0
 	}
 
+	deps := position.HandlerDependencies{
+		Manager:      mgr,
+		Broadcaster:  broadcaster,
+		WebDir:       *webDir,
+		AddAuditLog:  addAuditLog,
+		GetAuditLogs: getAuditLogs,
+	}
+
 	mux := http.NewServeMux()
 
 	// 1. POST /events - Ingest single event from Producer
-	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Failed to read request body", http.StatusBadRequest)
-			return
-		}
-		defer r.Body.Close()
-
-		var event models.OrderEvent
-		if err := json.Unmarshal(body, &event); err != nil {
-			log.Printf("[POSITION CONSUMER REJECTED] Malformed JSON: %v", err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			res := models.ProcessResult{
-				Status: models.StatusRejected,
-				Reason: fmt.Sprintf("Malformed JSON: %v", err),
-			}
-			addAuditLog(res)
-			json.NewEncoder(w).Encode(res)
-			return
-		}
-
-		res, err := mgr.ProcessEvent(event)
-		if err != nil {
-			log.Printf("[POSITION CONSUMER REJECTED] Event %s: %v", event.EventID, err)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			addAuditLog(res)
-			json.NewEncoder(w).Encode(res)
-			return
-		}
-
-		log.Printf("[POSITION CONSUMER %s] Event %s | Symbol=%s Tx=%s Qty=%d -> NetPosition=%d",
-			res.Status, event.EventID, event.Symbol, event.TransactionType, event.Quantity, res.NetPosition)
-
-		addAuditLog(res)
-
-		// Broadcast telemetry to connected SSE web clients
-		if broadcastBytes, bErr := json.Marshal(res); bErr == nil {
-			broadcaster.Broadcast(broadcastBytes)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(res)
-	})
+	mux.HandleFunc("/events", position.NewEventsHandler(deps))
 
 	// 2. GET /position & GET /api/position - Fetch current net position for all symbols seen
-	handlePositionJSON := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// If opened directly in browser navigation bar, serve the formatted positions.html page!
-		acceptHeader := r.Header.Get("Accept")
-		if r.URL.Query().Get("format") != "json" && strings.Contains(acceptHeader, "text/html") && !strings.Contains(acceptHeader, "application/json") {
-			http.ServeFile(w, r, filepath.Join(*webDir, "positions.html"))
-			return
-		}
-
-		positions := mgr.GetPositions()
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(positions)
-	}
-
-	mux.HandleFunc("/position", handlePositionJSON)
-	mux.HandleFunc("/api/position", handlePositionJSON)
+	posHandler := position.NewPositionHandler(deps)
+	mux.HandleFunc("/position", posHandler)
+	mux.HandleFunc("/api/position", posHandler)
 
 	// 3. GET /events/stream - Server-Sent Events stream for live dashboard
 	mux.HandleFunc("/events/stream", func(w http.ResponseWriter, r *http.Request) {
@@ -302,7 +202,7 @@ func main() {
 		reader := csv.NewReader(file)
 		reader.FieldsPerRecord = -1
 
-		results := make([]models.ProcessResult, 0)
+		results := make([]shared.ProcessResult, 0)
 		isFirst := true
 
 		for {
@@ -316,15 +216,15 @@ func main() {
 
 			if isFirst {
 				isFirst = false
-				if len(record) > 0 && record[0] == "event_id" {
+				if len(record) > 0 && strings.EqualFold(record[0], "event_id") {
 					continue
 				}
 			}
 
-			event, valErr := validator.ValidateRecord(record)
+			event, valErr := order.ValidateRecord(record)
 			if valErr != nil {
-				res := models.ProcessResult{
-					Status: models.StatusRejected,
+				res := shared.ProcessResult{
+					Status: shared.StatusRejected,
 					Reason: valErr.Error(),
 				}
 				results = append(results, res)

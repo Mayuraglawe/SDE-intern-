@@ -1,28 +1,28 @@
-package validator_test
+package order_test
 
 import (
 	"errors"
 	"testing"
 
-	"order-position-engine/internal/models"
-	"order-position-engine/internal/validator"
+	"order-position-engine/internal/order"
+	"order-position-engine/internal/shared"
 )
 
 func TestValidateRecord(t *testing.T) {
 	tests := []struct {
 		name        string
 		record      []string
-		wantEvent   *models.OrderEvent
+		wantEvent   *shared.OrderEvent
 		wantErrIs   error
 		expectError bool
 	}{
 		{
 			name:   "Valid BUY record",
 			record: []string{"evt-0001", "RELIANCE", "BUY", "90"},
-			wantEvent: &models.OrderEvent{
+			wantEvent: &shared.OrderEvent{
 				EventID:         "evt-0001",
 				Symbol:          "RELIANCE",
-				TransactionType: models.TxBuy,
+				TransactionType: shared.TxBuy,
 				Quantity:        90,
 			},
 			expectError: false,
@@ -30,10 +30,10 @@ func TestValidateRecord(t *testing.T) {
 		{
 			name:   "Valid SELL record",
 			record: []string{"evt-0002", "TCS", "SELL", "75"},
-			wantEvent: &models.OrderEvent{
+			wantEvent: &shared.OrderEvent{
 				EventID:         "evt-0002",
 				Symbol:          "TCS",
-				TransactionType: models.TxSell,
+				TransactionType: shared.TxSell,
 				Quantity:        75,
 			},
 			expectError: false,
@@ -41,62 +41,62 @@ func TestValidateRecord(t *testing.T) {
 		{
 			name:        "Blank event_id",
 			record:      []string{"", "RELIANCE", "BUY", "90"},
-			wantErrIs:   validator.ErrBlankEventID,
+			wantErrIs:   order.ErrBlankEventID,
 			expectError: true,
 		},
 		{
 			name:        "Blank symbol",
 			record:      []string{"evt-0001", "", "BUY", "90"},
-			wantErrIs:   validator.ErrBlankSymbol,
+			wantErrIs:   order.ErrBlankSymbol,
 			expectError: true,
 		},
 		{
 			name:        "Lowercase transaction type (buy)",
 			record:      []string{"evt-0001", "RELIANCE", "buy", "90"},
-			wantErrIs:   validator.ErrInvalidTxType,
+			wantErrIs:   order.ErrInvalidTxType,
 			expectError: true,
 		},
 		{
 			name:        "Invalid transaction type enum (HOLD)",
 			record:      []string{"evt-0001", "RELIANCE", "HOLD", "90"},
-			wantErrIs:   validator.ErrInvalidTxType,
+			wantErrIs:   order.ErrInvalidTxType,
 			expectError: true,
 		},
 		{
 			name:        "Zero quantity",
 			record:      []string{"evt-0001", "RELIANCE", "BUY", "0"},
-			wantErrIs:   validator.ErrNonPositiveQuantity,
+			wantErrIs:   order.ErrNonPositiveQuantity,
 			expectError: true,
 		},
 		{
 			name:        "Negative quantity",
 			record:      []string{"evt-0001", "RELIANCE", "BUY", "-100"},
-			wantErrIs:   validator.ErrNonPositiveQuantity,
+			wantErrIs:   order.ErrNonPositiveQuantity,
 			expectError: true,
 		},
 		{
 			name:        "Non-integer quantity (float)",
 			record:      []string{"evt-0001", "RELIANCE", "BUY", "90.5"},
-			wantErrIs:   validator.ErrInvalidQuantityFormat,
+			wantErrIs:   order.ErrInvalidQuantityFormat,
 			expectError: true,
 		},
 		{
 			name:        "Non-integer quantity (string)",
 			record:      []string{"evt-0001", "RELIANCE", "BUY", "abc"},
-			wantErrIs:   validator.ErrInvalidQuantityFormat,
+			wantErrIs:   order.ErrInvalidQuantityFormat,
 			expectError: true,
 		},
 		{
 			name:        "Missing columns",
 			record:      []string{"evt-0001", "RELIANCE"},
-			wantErrIs:   validator.ErrInvalidColumnCount,
+			wantErrIs:   order.ErrInvalidColumnCount,
 			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotEvent, err := validator.ValidateRecord(tt.record)
+			gotEvent, err := order.ValidateRecord(tt.record)
 			if tt.expectError {
 				if err == nil {
 					t.Fatalf("expected error containing %v, got nil", tt.wantErrIs)
@@ -117,23 +117,23 @@ func TestValidateRecord(t *testing.T) {
 }
 
 func TestValidateEvent(t *testing.T) {
-	validEvent := &models.OrderEvent{
+	validEvent := &shared.OrderEvent{
 		EventID:         "evt-100",
 		Symbol:          "INFY",
-		TransactionType: models.TxBuy,
+		TransactionType: shared.TxBuy,
 		Quantity:        50,
 	}
-	if err := validator.ValidateEvent(validEvent); err != nil {
+	if err := order.ValidateEvent(validEvent); err != nil {
 		t.Errorf("unexpected error for valid event: %v", err)
 	}
 
-	invalidEvent := &models.OrderEvent{
+	invalidEvent := &shared.OrderEvent{
 		EventID:         "evt-101",
 		Symbol:          "INFY",
 		TransactionType: "INVALID",
 		Quantity:        50,
 	}
-	if err := validator.ValidateEvent(invalidEvent); err == nil {
+	if err := order.ValidateEvent(invalidEvent); err == nil {
 		t.Errorf("expected error for invalid event transaction type, got nil")
 	}
 }
