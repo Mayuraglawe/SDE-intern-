@@ -1,0 +1,11 @@
+bin/
+*.db
+*.exe
+.env
+
+# Large data and assessment files
+order_positions.db
+SDE_Intern_Assessment.pdf
+order_updates.csv
+order_updates (1).csv
+seed_data.sql

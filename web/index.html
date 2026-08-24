@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indo Thai | Order Position Engine & Live Analytics</title>
+    <!-- Fonts & Chart.js -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="logo-box">
+                    <img src="indothai-logo.png" alt="Indo Thai Logo" class="brand-logo-img" onerror="this.src='https://www.indothai.co.in/wp-content/uploads/2018/03/Indothai-Logo.png'">
+                </div>
+                <div class="brand-divider"></div>
+                <div>
+                    <span class="brand-title">Order Position Engine</span>
+                    <span class="brand-subtitle">Real-Time Data Streaming & Analytics Platform</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div id="connectionStatus" class="status-badge connecting">
+                    <span class="pulse-dot"></span>
+                    <span id="statusText">Connecting Stream...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Content -->
+        <main class="dashboard">
+            <!-- Telemetry Overview Cards -->
+            <section class="telemetry-grid">
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Active Symbols</span>
+                        <div class="stat-icon cyan">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-value" id="valActiveSymbols">0</div>
+                    <div class="stat-footer text-muted">Unique trading pairs tracked</div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Total Ingested Events</span>
+                        <div class="stat-icon blue">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-value" id="valTotalEvents">0</div>
+                    <div class="stat-footer text-muted">Processed via REST / Stream</div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Accepted Updates</span>
+                        <div class="stat-icon green">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-value text-green" id="valAcceptedEvents">0</div>
+                    <div class="stat-footer text-muted">State updates applied</div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Duplicates Suppressed</span>
+                        <div class="stat-icon orange">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-value text-orange" id="valDuplicateEvents">0</div>
+                    <div class="stat-footer text-muted">O(1) Idempotency wins</div>
+                </div>
+
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Rejected / Skipped</span>
+                        <div class="stat-icon red">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        </div>
+                    </div>
+                    <div class="stat-value text-red" id="valRejectedEvents">0</div>
+                    <div class="stat-footer text-muted">Malformed input filter</div>
+                </div>
+            </section>
+
+            <!-- Middle Section: Position Chart + Controls -->
+            <section class="main-grid">
+                <!-- Position Chart Card -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <div>
+                            <h3 class="card-title">Real-Time Net Symbol Positions</h3>
+                            <p class="card-description">Live aggregate position calculated from streaming BUY (+) & SELL (-) updates</p>
+                        </div>
+                        <div class="chart-legend-pills">
+                            <span class="pill-legend buy">Long (+)</span>
+                            <span class="pill-legend sell">Short (-)</span>
+                            <span class="pill-legend neutral">Neutral (0)</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="positionsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Control Panel & Upload Card -->
+                <div class="card control-card">
+                    <div class="card-header">
+                        <h3 class="card-title">Stream Control & CSV Ingest</h3>
+                    </div>
+                    <div class="control-body">
+                        <div class="upload-zone" id="uploadDropZone">
+                            <input type="file" id="csvFileInput" accept=".csv" class="file-input-hidden" title="Select CSV order file to upload" aria-label="Select CSV order file to upload">
+                            <div class="upload-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            </div>
+                            <p class="upload-title">Drop <code>order_updates.csv</code> here</p>
+                            <p class="upload-subtitle">or click to upload custom order batch</p>
+                            <button class="btn btn-primary btn-sm" onclick="document.getElementById('csvFileInput').click()">Browse File</button>
+                        </div>
+
+                        <div class="control-divider">OR STREAM CONTROLS</div>
+
+                        <div class="stream-info-box">
+                            <div class="info-row">
+                                <span>Default Assessment CSV:</span>
+                                <code>order_updates (1).csv</code>
+                            </div>
+                            <div class="info-row">
+                                <span>Default Target Port:</span>
+                                <code>:8080</code>
+                            </div>
+                            <div class="info-row">
+                                <span>Throttler Speed:</span>
+                                <span class="badge-speed">50 msgs / sec</span>
+                            </div>
+                        </div>
+
+                        <div class="quick-actions">
+                            <button id="btnFetchPosition" class="btn btn-secondary w-100">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                                Query REST GET /position
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Section: Live Telemetry Stream & API Inspector -->
+            <section class="bottom-grid">
+                <!-- Audit Log Stream Table -->
+                <div class="card log-card">
+                    <div class="card-header">
+                        <div>
+                            <h3 class="card-title">Live Audit Log & Event Stream</h3>
+                            <p class="card-description">Real-time event processing telemetry fed via SSE</p>
+                        </div>
+                        <div class="filter-box">
+                            <input type="text" id="logSearchInput" placeholder="Filter by Symbol or Event ID..." class="form-input">
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Event ID</th>
+                                    <th>Symbol</th>
+                                    <th>Net Position</th>
+                                    <th>Reason / Log Details</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTableBody">
+                                <tr class="empty-row">
+                                    <td colspan="6">Waiting for order updates stream...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- API Response Inspector -->
+                <div class="card inspector-card">
+                    <div class="card-header">
+                        <h3 class="card-title">REST API Response Inspector</h3>
+                        <span class="badge-endpoint">GET /position</span>
+                    </div>
+                    <div class="json-inspector">
+                        <pre id="jsonDisplay"><code>{
+  "RELIANCE": 0,
+  "TCS": 0
+}</code></pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Indo Thai | Symbol Positions Overview</title>
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        .search-filter-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .filter-select {
+            background: #ffffff;
+            border: 1px solid var(--border-card);
+            color: var(--text-main);
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+        }
+        .pos-bar-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+        }
+        .pos-track {
+            flex-grow: 1;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .pos-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .pos-fill.long { background: var(--accent-green); }
+        .pos-fill.short { background: var(--accent-red); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Top Navigation -->
+        <header class="navbar">
+            <div class="brand">
+                <div class="logo-box">
+                    <img src="indothai-logo.png" alt="Indo Thai Logo" class="brand-logo-img" onerror="this.src='https://www.indothai.co.in/wp-content/uploads/2018/03/Indothai-Logo.png'">
+                </div>
+                <div class="brand-divider"></div>
+                <div>
+                    <span class="brand-title">Symbol Positions Directory</span>
+                    <span class="brand-subtitle">Detailed Breakdown & Real-Time Net Position Analytics</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    Back to Live Stream Dashboard
+                </a>
+                <button id="btnExportCSV" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Export Positions CSV
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <!-- KPI Summary Cards -->
+            <section class="telemetry-grid">
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Total Traded Pairs</span>
+                    </div>
+                    <div class="stat-value" id="kpiTotalPairs">0</div>
+                    <div class="stat-footer text-muted">Active symbol positions</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Long Positions (+)</span>
+                    </div>
+                    <div class="stat-value text-green" id="kpiLongPairs">0</div>
+                    <div class="stat-footer text-muted">Net positive balance</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Short Positions (-)</span>
+                    </div>
+                    <div class="stat-value text-red" id="kpiShortPairs">0</div>
+                    <div class="stat-footer text-muted">Net negative balance</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-header">
+                        <span class="stat-title">Neutral Positions (0)</span>
+                    </div>
+                    <div class="stat-value text-muted" id="kpiNeutralPairs">0</div>
+                    <div class="stat-footer text-muted">Zero net balance</div>
+                </div>
+            </section>
+
+            <!-- Table & Controls Section -->
+            <section class="card">
+                <div class="page-header">
+                    <div>
+                        <h2 class="card-title">All Symbol Net Positions</h2>
+                        <p class="card-description">Live API query output from <code>GET /position</code></p>
+                    </div>
+                    <div class="search-filter-bar">
+                        <input type="text" id="searchInput" placeholder="Search symbol name..." class="form-input" aria-label="Search trading symbol">
+                        <select id="typeFilter" class="filter-select" aria-label="Filter position type" title="Filter position type">
+                            <option value="ALL">All Position Types</option>
+                            <option value="LONG">Long (+) Only</option>
+                            <option value="SHORT">Short (-) Only</option>
+                            <option value="NEUTRAL">Neutral (0) Only</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="table-container table-container-large">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Trading Symbol</th>
+                                <th>Position Type</th>
+                                <th>Net Position</th>
+                                <th>Visual Distribution</th>
+                            </tr>
+                        </thead>
+                        <tbody id="positionsTableBody">
+                            <tr class="empty-row">
+                                <td colspan="4">Loading symbol positions...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            let positionsData = {};
+
+            const positionsTableBody = document.getElementById('positionsTableBody');
+            const searchInput = document.getElementById('searchInput');
+            const typeFilter = document.getElementById('typeFilter');
+            const kpiTotalPairs = document.getElementById('kpiTotalPairs');
+            const kpiLongPairs = document.getElementById('kpiLongPairs');
+            const kpiShortPairs = document.getElementById('kpiShortPairs');
+            const kpiNeutralPairs = document.getElementById('kpiNeutralPairs');
+            const btnExportCSV = document.getElementById('btnExportCSV');
+
+            async function fetchPositions() {
+                try {
+                    const resp = await fetch('/api/position');
+                    positionsData = await resp.json();
+                    renderPage();
+                } catch (err) {
+                    positionsTableBody.innerHTML = `
+                        <tr class="empty-row">
+                            <td colspan="4" class="text-red">Failed to load positions: ${err.message}</td>
+                        </tr>
+                    `;
+                }
+            }
+
+            function renderPage() {
+                const symbols = Object.keys(positionsData);
+                let longCount = 0, shortCount = 0, neutralCount = 0;
+                let maxAbsPos = 1;
+
+                symbols.forEach(sym => {
+                    const pos = positionsData[sym];
+                    if (pos > 0) longCount++;
+                    else if (pos < 0) shortCount++;
+                    else neutralCount++;
+                    if (Math.abs(pos) > maxAbsPos) maxAbsPos = Math.abs(pos);
+                });
+
+                kpiTotalPairs.textContent = symbols.length;
+                kpiLongPairs.textContent = longCount;
+                kpiShortPairs.textContent = shortCount;
+                kpiNeutralPairs.textContent = neutralCount;
+
+                const search = searchInput.value.trim().toUpperCase();
+                const filter = typeFilter.value;
+
+                const filteredSymbols = symbols.filter(sym => {
+                    const pos = positionsData[sym];
+                    const matchesSearch = sym.includes(search);
+                    let matchesType = true;
+                    if (filter === 'LONG') matchesType = pos > 0;
+                    else if (filter === 'SHORT') matchesType = pos < 0;
+                    else if (filter === 'NEUTRAL') matchesType = pos === 0;
+
+                    return matchesSearch && matchesType;
+                });
+
+                if (filteredSymbols.length === 0) {
+                    positionsTableBody.innerHTML = `
+                        <tr class="empty-row">
+                            <td colspan="4">No symbol positions matching criteria</td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                positionsTableBody.innerHTML = filteredSymbols.map(sym => {
+                    const pos = positionsData[sym];
+                    let tagClass = 'neutral', tagText = 'NEUTRAL (0)';
+                    let posStr = pos.toString();
+                    let widthPct = Math.min(100, Math.round((Math.abs(pos) / maxAbsPos) * 100));
+
+                    if (pos > 0) {
+                        tagClass = 'accepted';
+                        tagText = 'LONG (+)';
+                        posStr = `+${pos}`;
+                    } else if (pos < 0) {
+                        tagClass = 'rejected';
+                        tagText = 'SHORT (-)';
+                    }
+
+                    return `
+                        <tr>
+                            <td><strong>${sym}</strong></td>
+                            <td><span class="tag-status ${tagClass}">${tagText}</span></td>
+                            <td class="${pos > 0 ? 'text-green' : (pos < 0 ? 'text-red' : '')}">${posStr}</td>
+                            <td>
+                                <div class="pos-bar-cell">
+                                    <div class="pos-track">
+                                        <div class="pos-fill ${pos > 0 ? 'long' : 'short'}" style="width: ${widthPct}%;"></div>
+                                    </div>
+                                    <span class="pos-pct-text">${widthPct}%</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            btnExportCSV.addEventListener('click', () => {
+                const symbols = Object.keys(positionsData);
+                let csvContent = "data:text/csv;charset=utf-8,Symbol,NetPosition\n";
+                symbols.forEach(sym => {
+                    csvContent += `${sym},${positionsData[sym]}\n`;
+                });
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `indothai_positions_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            searchInput.addEventListener('input', renderPage);
+            typeFilter.addEventListener('change', renderPage);
+
+            fetchPositions();
+        });
+    </script>
+</body>
+</html>
