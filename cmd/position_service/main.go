@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -58,7 +59,13 @@ func (b *SSEBroadcaster) Broadcast(data []byte) {
 }
 
 func main() {
-	port := flag.Int("port", 8080, "Port for Position Maintaining Service")
+	defaultPort := 8080
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		if p, err := strconv.Atoi(envPort); err == nil {
+			defaultPort = p
+		}
+	}
+	port := flag.Int("port", defaultPort, "Port for Position Maintaining Service")
 	webDir := flag.String("web-dir", "./web", "Directory containing web frontend files")
 	flag.Parse()
 

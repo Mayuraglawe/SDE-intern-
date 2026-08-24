@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for Go Order Position Engine
 # Stage 1: Build binaries
-FROM golang:1.26-alpine AS builder
+FROM golang:alpine AS builder
 WORKDIR /app
 
 COPY go.mod ./
